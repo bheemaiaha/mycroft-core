@@ -316,7 +316,11 @@ class IntentService:
             # Get language of the utterance
             lang = message.data.get('lang', "en-us")
             set_active_lang(lang)
-            utterances = message.data.get('utterances', '')
+
+            # normalize() changes "it's a boy" to "it is a boy", etc.
+            utterances = [normalize(u.lower(), remove_articles=False)
+                          for u in message.data.get('utterances', '')]
+            LOG.debug("Utterances: {}".format(utterances))
 
             stopwatch = Stopwatch()
             with stopwatch:
@@ -328,9 +332,12 @@ class IntentService:
                     intent = self._adapt_intent_match(utterances, lang)
                     padatious_intent = PadatiousService.instance.calc_intent(
                                         utterances[0])
+                    LOG.debug("Padatious intents: {}".format(padatious_intent))
+                    LOG.debug("    Adapt intents: {}".format(intent))
 
             if converse:
                 # Report that converse handled the intent and return
+                LOG.debug("Handled in converse()")
                 ident = message.context['ident'] if message.context else None
                 report_timing(ident, 'intent_service', stopwatch,
                               {'intent_type': 'converse'})
@@ -389,9 +396,8 @@ class IntentService:
         best_intent = None
         for utterance in utterances:
             try:
-                # normalize() changes "it's a boy" to "it is boy", etc.
                 best_intent = next(self.engine.determine_intent(
-                    normalize(utterance, lang), 100,
+                    utterance, 100,
                     include_tags=True,
                     context_manager=self.context_manager))
                 # TODO - Should Adapt handle this?
